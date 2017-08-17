@@ -1,0 +1,83 @@
+buildscript {
+    ext {
+        springBootVersion = '2.0.+'
+    }
+    repositories {
+        mavenCentral()
+        maven { url "http://repo.spring.io/milestone" }        
+		maven { url "http://repo.spring.io/snapshot" }
+    }
+    dependencies {
+        classpath "org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}"
+		classpath "org.ajoberstar:grgit:1.1.0"
+    }
+}
+
+apply plugin: 'java'
+apply plugin: 'org.springframework.boot'
+
+
+group = 'com.example.rest'
+archivesBaseName = 'EmployeeRESTApp'
+version = '1.0'
+sourceCompatibility = 1.8
+ext {
+    git = org.ajoberstar.grgit.Grgit.open(file('..'))
+    //revision = git.head().id
+    revision = git.head().abbreviatedId	
+	buildNumber = System.getenv('BUILD_NUMBER')
+	oracleCloudManifestFileName = "${buildDir}/manifest.json"
+}
+
+
+task oracleCloudManifest(dependsOn: build) {  
+  doLast {
+    def oracleCloudManifestFile = file("${oracleCloudManifestFileName}")
+    oracleCloudManifestFile.text = """
+{
+    "runtime": {
+        "majorVersion": "${sourceCompatibility.majorVersion}"
+    },
+    "command": "java -jar ${jar.archiveName}",
+    "release": {
+        "version": "${version}",
+        "build": "${buildNumber}",
+        "commit": "${revision}"
+    },
+    "notes": "Employee Spring Boot Web Service"
+}
+   """
+   }
+}
+
+
+task distZip(type: Zip, dependsOn: [build, oracleCloudManifest]) {
+    from jar
+    from oracleCloudManifestFileName
+    destinationDir file("$distsDir")
+}
+
+task distTar(type: Tar, dependsOn: [build, oracleCloudManifest]) {
+    compression = Compression.GZIP 
+    from jar
+    from oracleCloudManifestFileName
+    destinationDir file("$distsDir")
+}
+
+task assembleDist(type: Task, dependsOn: [distZip, distTar]) {}
+
+repositories {
+    mavenCentral()
+    maven { url "http://repo.spring.io/milestone" }
+}
+
+dependencies {
+    implementation group: 'org.springframework.boot', name: 'spring-boot-starter-web', version: "${springBootVersion}"
+    implementation group: 'org.springframework.boot', name: 'spring-boot-starter-data-jpa', version: "${springBootVersion}"
+    
+    runtimeOnly group: 'com.h2database', name: 'h2', version: '1.4.+'
+    
+    testImplementation group: 'org.springframework.boot', name: 'spring-boot-starter-test', version: "${springBootVersion}"
+    testImplementation 'junit:junit:4.12'
+}
+
